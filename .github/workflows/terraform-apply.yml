@@ -1,0 +1,115 @@
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths: ["envs/**", "templates/**", "policies/**", ".github/workflows/**"]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_owner: alp
+  TF_VAR_aws_region: us-east-1
+
+jobs:
+  apply-dev:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: dev
+    concurrency:
+      group: tfstate-dev
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: envs/dev
+    env:
+      TF_VAR_environment: dev
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_DEV }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+      - run: terraform init -input=false -lockfile=readonly
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      - run: terraform apply -input=false tfplan
+
+  apply-prod:
+    if: github.event_name == 'push'
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: tfstate-prod
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: envs/prod
+    env:
+      TF_VAR_environment: prod
+      TF_VAR_db_password: ${{ secrets.DB_PASSWORD_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_PROD }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+      - run: terraform init -input=false -lockfile=readonly
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      - run: terraform apply -input=false tfplan
+
+  drift:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [dev, prod]
+    concurrency:
+      group: tfstate-${{ matrix.environment }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: envs/${{ matrix.environment }}
+    env:
+      TF_VAR_environment: ${{ matrix.environment }}
+      TF_VAR_db_password: ${{ matrix.environment == 'prod' && secrets.DB_PASSWORD_PROD || secrets.DB_PASSWORD_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.environment == 'prod' && vars.AWS_ROLE_PROD || vars.AWS_ROLE_DEV }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+      - run: terraform init -input=false -lockfile=readonly
+      - name: Detecter la derive
+        run: |
+          set +e
+          terraform plan -input=false -detailed-exitcode -no-color
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::error::Derive detectee sur ${{ matrix.environment }}"
+            exit 1
+          fi
+          exit "$code"

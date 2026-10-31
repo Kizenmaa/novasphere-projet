@@ -18,9 +18,9 @@ resource "aws_iam_role" "ci" {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:Kizenmaa/novasphere-projet:pull_request",
-            "repo:Kizenmaa/novasphere-projet:ref:refs/heads/main",
-            "repo:Kizenmaa/novasphere-projet:environment:dev"
+            "repo:Kizenmaa@128736823/novasphere-projet@1407407636:pull_request",
+            "repo:Kizenmaa@128736823/novasphere-projet@1407407636:ref:refs/heads/main",
+            "repo:Kizenmaa@128736823/novasphere-projet@1407407636:environment:dev"
           ]
         }
       }
@@ -54,8 +54,8 @@ resource "aws_iam_role" "ci_prod" {
         StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
         StringLike = {
           "token.actions.githubusercontent.com:sub" = [
-            "repo:Kizenmaa/novasphere-projet:environment:prod",
-            "repo:Kizenmaa/novasphere-projet:ref:refs/heads/main"
+            "repo:Kizenmaa@128736823/novasphere-projet@1407407636:environment:prod",
+            "repo:Kizenmaa@128736823/novasphere-projet@1407407636:ref:refs/heads/main"
           ]
         }
       }
